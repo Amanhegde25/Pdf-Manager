@@ -9,9 +9,11 @@ const browseBtn = document.getElementById('browseBtn');
 const fileList = document.getElementById('fileList');
 const fileCount = document.getElementById('fileCount');
 const mergeBtn = document.getElementById('mergeBtn');
+const mergeSection = document.getElementById('mergeSection');
+const fileListSection = document.getElementById('fileListSection');
+const resultCard = document.getElementById('resultCard');
 const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.getElementById('loadingText');
-const resultCard = document.getElementById('resultCard');
 
 // ===== Init =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,15 +22,25 @@ document.addEventListener('DOMContentLoaded', () => {
     initMerge();
     initClearAll();
 
+    // Preview modal
     document.getElementById('previewCloseBtn').addEventListener('click', closePreview);
     document.getElementById('previewModal').addEventListener('click', (e) => {
         if (e.target.id === 'previewModal') closePreview();
     });
+
+    // Result actions
     document.getElementById('previewMergedBtn').addEventListener('click', () => {
         openPreview('/merge/preview', 'Merged PDF');
     });
     document.getElementById('downloadMergedBtn').addEventListener('click', () => {
         window.location.href = '/download-merged';
+    });
+    document.getElementById('adjustBtn').addEventListener('click', () => {
+        resultCard.style.display = 'none';
+        dropzone.style.display = '';
+        fileListSection.style.display = '';
+        mergeSection.style.display = uploadedFiles.length > 0 ? '' : 'none';
+        mergeBtn.disabled = uploadedFiles.length < 1;
     });
 });
 
@@ -82,7 +94,6 @@ async function handleFiles(files) {
 
     if (validFiles.length === 0) return;
 
-    // Add temp entries for all files at once
     const tempEntries = validFiles.map(({ file, ext }) => {
         const tempId = 'temp-' + Date.now() + '-' + Math.random();
         uploadedFiles.push({ id: tempId, name: file.name, pages: '...', type: ext, uploading: true });
@@ -91,7 +102,6 @@ async function handleFiles(files) {
     renderFileList();
     showLoading(`Uploading ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}...`);
 
-    // Upload all in parallel
     const uploads = tempEntries.map(async ({ file, tempId }) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -120,9 +130,9 @@ function renderFileList() {
     fileList.innerHTML = '';
     fileCount.textContent = uploadedFiles.length + ' file' + (uploadedFiles.length !== 1 ? 's' : '');
     mergeBtn.disabled = uploadedFiles.length < 1;
-    document.getElementById('mergeSection').style.display = uploadedFiles.length > 0 ? '' : 'none';
+    mergeSection.style.display = uploadedFiles.length > 0 ? '' : 'none';
 
-    uploadedFiles.forEach((file, index) => {
+    uploadedFiles.forEach((file) => {
         const card = document.createElement('div');
         card.className = 'file-card';
         card.dataset.id = file.id;
@@ -144,15 +154,12 @@ function renderFileList() {
         fileList.appendChild(card);
     });
 
-    // Re-init sortable after render
     initSortable();
 }
 
 // ===== Sortable =====
 function initSortable() {
-    if (sortableInstance) {
-        sortableInstance.destroy();
-    }
+    if (sortableInstance) sortableInstance.destroy();
     if (typeof Sortable !== 'undefined' && fileList) {
         sortableInstance = Sortable.create(fileList, {
             animation: 200,
@@ -179,9 +186,7 @@ async function removeFile(fileId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: fileId })
         });
-    } catch (err) {
-        // ignore
-    }
+    } catch (err) { /* ignore */ }
     uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
     renderFileList();
 }
@@ -208,16 +213,16 @@ function initMerge() {
             });
 
             const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Merge failed');
-            }
+            if (!response.ok) throw new Error(data.error || 'Merge failed');
 
             hideLoading();
 
-            // Show result card
+            // Show result, hide inputs
             document.getElementById('resultText').textContent =
                 `${realFiles.length} file${realFiles.length > 1 ? 's' : ''} merged successfully!`;
-            document.getElementById('mergeSection').style.display = 'none';
+            mergeSection.style.display = 'none';
+            fileListSection.style.display = 'none';
+            dropzone.style.display = 'none';
             resultCard.style.display = 'block';
 
             showToast('PDF merged successfully!', 'success');
@@ -258,12 +263,12 @@ function initClearAll() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
-        } catch (err) {
-            // ignore
-        }
+        } catch (err) { /* ignore */ }
         uploadedFiles = [];
         resultCard.style.display = 'none';
-        document.getElementById('mergeSection').style.display = 'none';
+        mergeSection.style.display = 'none';
+        dropzone.style.display = '';
+        fileListSection.style.display = '';
         renderFileList();
         showToast('All files cleared.', 'success');
     });
@@ -275,20 +280,14 @@ function previewFile(fileId, fileName) {
 }
 
 function openPreview(url, title) {
-    const modal = document.getElementById('previewModal');
-    const frame = document.getElementById('previewFrame');
-    const titleEl = document.getElementById('previewTitle');
-
-    titleEl.textContent = title;
-    frame.src = url;
-    modal.classList.add('active');
+    document.getElementById('previewTitle').textContent = title;
+    document.getElementById('previewFrame').src = url;
+    document.getElementById('previewModal').classList.add('active');
     document.body.style.overflow = 'hidden';
 }
 
 function closePreview() {
-    const modal = document.getElementById('previewModal');
-    const frame = document.getElementById('previewFrame');
-    frame.src = '';
-    modal.classList.remove('active');
+    document.getElementById('previewFrame').src = '';
+    document.getElementById('previewModal').classList.remove('active');
     document.body.style.overflow = '';
 }
